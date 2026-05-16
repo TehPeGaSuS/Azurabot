@@ -20,7 +20,7 @@ prune_older_than_sec = 300
 trigger = "!"
 cooldown_sec = 60
 # np_format defaults to the announce format above if not set
-# next_format supports: {artist}, {title}, {text}
+# next_format supports: {artist}, {title}, {text}, {radio_name}
 next_format = 'Next up: \x02{artist} - {title}\x02'
 
 [announce.fallbacks]

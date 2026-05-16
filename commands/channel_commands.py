@@ -84,9 +84,10 @@ class ChannelCommandHandler:
         nxt = event.playing_next
         fb = self.ann_cfg.fallbacks
         variables = {
-            "artist": nxt.artist or fb.artist,
-            "title":  nxt.title  or fb.title,
-            "text":   nxt.text   or f"{nxt.artist} - {nxt.title}",
+            "artist":     nxt.artist or fb.artist,
+            "title":      nxt.title  or fb.title,
+            "text":       nxt.text   or f"{nxt.artist} - {nxt.title}",
+            "radio_name": event.radio_name,
         }
         try:
             message = self.cmd_cfg.next_format.format(**variables)
