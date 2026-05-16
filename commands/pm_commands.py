@@ -54,6 +54,7 @@ class PMCommandHandler:
         self.webhook = webhook_server
         self.queue = event_queue
         self.last_event = last_event  # shared reference from main
+        self.reload_callback = None  # set by main after wiring
 
         # (network_name, mask) -> True (authenticated)
         self._sessions: dict[tuple[str, str], bool] = {}
@@ -97,6 +98,7 @@ class PMCommandHandler:
             "status":     self._cmd_status,
             "netstatus":  self._cmd_netstatus,
             "reconnect":  self._cmd_reconnect,
+            "reload":     self._cmd_reload,
             "help":       self._cmd_help,
         }
 
@@ -383,6 +385,31 @@ class PMCommandHandler:
         else:
             await self._reply(network_name, mask, f"Network '{net}' not found.")
 
+    async def _cmd_reload(self, network_name: str, mask: str, args: list[str]) -> None:
+        """reload [--purge]  — Reload config.toml and apply network changes live."""
+        purge = "--purge" in args
+        if not self.reload_callback:
+            await self._reply(network_name, mask, "Reload not available (callback not wired).")
+            return
+        await self._reply(network_name, mask, "Reloading config...")
+        try:
+            summary = await self.reload_callback(purge=purge)
+        except Exception as exc:
+            await self._reply(network_name, mask, f"Reload failed: {exc}")
+            return
+
+        parts = []
+        if summary["added"]:
+            parts.append(f"added: {', '.join(summary['added'])}")
+        if summary["removed"]:
+            verb = "removed+purged" if purge else "removed"
+            parts.append(f"{verb}: {', '.join(summary['removed'])}")
+        if summary["restarted"]:
+            parts.append(f"restarted: {', '.join(summary['restarted'])}")
+        if summary["unchanged"]:
+            parts.append(f"unchanged: {', '.join(summary['unchanged'])}")
+        await self._reply(network_name, mask, "Done. " + (" | ".join(parts) if parts else "No changes."))
+
     # ------------------------------------------------------------------ #
     # Help
     # ------------------------------------------------------------------ #
@@ -405,6 +432,7 @@ class PMCommandHandler:
             "  status                            — Webhook + queue status",
             "  netstatus                         — IRC connection status",
             "  reconnect <network>               — Force reconnect a network",
+            "  reload [--purge]                  — Reload config, apply network changes live",
         ]
         for line in lines:
             await self._reply(network_name, mask, line)

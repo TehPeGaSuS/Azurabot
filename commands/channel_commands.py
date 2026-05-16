@@ -36,6 +36,15 @@ class ChannelCommandHandler:
         # (network_name, channel, command) -> last trigger timestamp
         self._cooldowns: dict[tuple[str, str, str], float] = {}
 
+    def reload(self, new_cfg, removed_networks: list[str] | None = None) -> None:
+        """Swap config in-place and prune cooldowns for removed networks."""
+        self.cmd_cfg = new_cfg.commands
+        self.ann_cfg = new_cfg.announce
+        if removed_networks:
+            for key in list(self._cooldowns):
+                if key[0] in removed_networks:
+                    del self._cooldowns[key]
+
     async def handle(self, network_name: str, channel: str, mask: str, message: str) -> None:
         """Called for every PRIVMSG in a channel. Checks for trigger prefix."""
         message = message.strip()

@@ -54,6 +54,10 @@ class Dispatcher:
         self._task: asyncio.Task | None = None
         self._prune_task: asyncio.Task | None = None
 
+    def reload(self, new_cfg) -> None:
+        """Swap announce config in-place."""
+        self.cfg = new_cfg.announce
+
     def start(self) -> None:
         self._task = asyncio.create_task(self._run(), name="dispatcher")
         self._prune_task = asyncio.create_task(self._prune_loop(), name="dispatcher-prune")

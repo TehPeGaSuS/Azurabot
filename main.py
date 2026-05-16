@@ -125,6 +125,19 @@ async def main() -> None:
 
     log.info("Bot running. Press Ctrl+C to stop.")
 
+    # ── Reload ────────────────────────────────────────────────────────────
+    async def do_reload(purge: bool = False) -> dict:
+        log.info("Reloading config from %s (purge=%s)", config_path, purge)
+        new_cfg = cfg_module.load(config_path)
+        summary = await irc_manager.reload(new_cfg, db, purge=purge)
+        dispatcher.reload(new_cfg)
+        channel_commands.reload(new_cfg, removed_networks=summary["removed"])
+        pm_commands.cfg = new_cfg  # type: ignore[union-attr]
+        log.info("Reload complete: %s", summary)
+        return summary
+
+    pm_commands.reload_callback = do_reload  # type: ignore[union-attr]
+
     # ── Shutdown handling ─────────────────────────────────────────────────
     loop = asyncio.get_running_loop()
     stop_event = asyncio.Event()
@@ -135,6 +148,12 @@ async def main() -> None:
 
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, _signal_handler)
+
+    def _sighup_handler() -> None:
+        log.info("SIGHUP received — scheduling reload")
+        asyncio.ensure_future(do_reload())
+
+    loop.add_signal_handler(signal.SIGHUP, _sighup_handler)
 
     await stop_event.wait()
 
