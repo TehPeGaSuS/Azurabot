@@ -1,0 +1,65 @@
+[webhook]
+host = "0.0.0.0"
+port = 8080
+secret = "your-webhook-secret"
+
+[database]
+path = "bot.db"
+
+[owner]
+nickname = "YourNick"
+password = "your-bot-password"
+
+[announce]
+format = '\x02[{radio_name}]\x02 Now Playing: \x02{artist} - {title}\x02 | \x0312{listeners} listeners\x03 | DJ: {dj_name}'
+dedup_window_sec = 60
+prune_interval_sec = 3600
+prune_older_than_sec = 300
+
+[announce.fallbacks]
+dj_name = "Auto DJ"
+artist = "Unknown Artist"
+title = "Unknown Title"
+
+# Auth methods: "sasl", "nickserv", "on_connect", "none"
+
+[[networks]]
+name = "Libera"
+host = "irc.libera.chat"
+port = 6697
+tls = true
+nick = "radiobot"
+auth_method = "sasl"
+sasl_user = "radiobot"
+sasl_pass = "secret"
+home_channel = "#radiobot"
+
+[[networks]]
+name = "OFTC"
+host = "irc.oftc.net"
+port = 6697
+tls = true
+nick = "radiobot"
+auth_method = "nickserv"
+nickserv_pass = "secret"
+
+[[networks]]
+name = "DALnet"
+host = "irc.dal.net"
+port = 6667
+tls = false
+nick = "radiobot"
+auth_method = "on_connect"
+on_connect_delay_sec = 2
+on_connect_commands = [
+  "PRIVMSG NickServ@services.dal.net :IDENTIFY secret",
+  "MODE radiobot +x"
+]
+
+[[networks]]
+name = "ExampleOpen"
+host = "irc.example.net"
+port = 6667
+tls = false
+nick = "radiobot"
+auth_method = "none"
