@@ -23,7 +23,7 @@ cooldown_sec = 60
 # next_format supports: {artist}, {title}, {text}
 next_format = 'Next up: \x02{artist} - {title}\x02'
 
-
+[announce.fallbacks]
 dj_name = "Auto DJ"
 artist = "Unknown Artist"
 title = "Unknown Title"

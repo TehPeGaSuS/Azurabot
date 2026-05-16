@@ -57,6 +57,8 @@ class CommandsConfig:
 
 
 
+@dataclass
+class NetworkConfig:
     name: str
     host: str
     port: int
