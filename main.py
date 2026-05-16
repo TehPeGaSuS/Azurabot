@@ -29,11 +29,15 @@ log = logging.getLogger(__name__)
 
 async def main() -> None:
     config_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("config.toml")
+    config_path = config_path.resolve()
     log.info("Loading config from %s", config_path)
     cfg = cfg_module.load(config_path)
 
     # ── Database ──────────────────────────────────────────────────────────
-    db = Database(cfg.database.path)
+    db_path = Path(cfg.database.path)
+    if not db_path.is_absolute():
+        db_path = config_path.parent / db_path
+    db = Database(str(db_path))
     await db.connect()
 
     # Warn about channels whose network no longer exists in config
