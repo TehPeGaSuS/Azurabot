@@ -1,15 +1,14 @@
 """
 commands/channel_commands.py — Public channel commands (!np, !next).
 
-Anyone in a registered channel can trigger these. Rate limited per channel
-with a configurable cooldown (shared across all commands in that channel).
-Hits are silently ignored.
+Anyone in a registered channel can trigger these. Responses are
+suppressed per channel if the song hasn't changed since the last reply,
+so the current song acts as the natural cooldown.
 """
 
 from __future__ import annotations
 
 import logging
-import time
 
 from announcer import format_message
 from config import CommandsConfig, AnnounceConfig, AzuracastConfig
@@ -35,18 +34,18 @@ class ChannelCommandHandler:
         self.last_event = last_event
         self.db = db
 
-        # (network_name, channel, command) -> last trigger timestamp
-        self._cooldowns: dict[tuple[str, str, str], float] = {}
+        # (network_name, channel, command) -> last song_id replied with
+        self._last_replied: dict[tuple[str, str, str], str] = {}
 
     def reload(self, new_cfg, removed_networks: list[str] | None = None) -> None:
-        """Swap config in-place and prune cooldowns for removed networks."""
+        """Swap config in-place and prune state for removed networks."""
         self.cmd_cfg = new_cfg.commands
         self.ann_cfg = new_cfg.announce
         self.az_cfg = new_cfg.azuracast
         if removed_networks:
-            for key in list(self._cooldowns):
+            for key in list(self._last_replied):
                 if key[0] in removed_networks:
-                    del self._cooldowns[key]
+                    del self._last_replied[key]
 
     async def handle(self, network_name: str, channel: str, mask: str, message: str) -> None:
         """Called for every PRIVMSG in a channel. Checks for trigger prefix."""
@@ -65,16 +64,6 @@ class ChannelCommandHandler:
         if row is None:
             log.debug("Ignoring %s%s in unregistered channel %s/%s", trigger, command, network_name, channel)
             return
-
-        # Rate limit check
-        key = (network_name, channel, command)
-        now = time.monotonic()
-        last = self._cooldowns.get(key, 0.0)
-        if now - last < self.cmd_cfg.cooldown_sec:
-            log.debug("Rate limit hit for %s/%s — ignoring %s%s", network_name, channel, trigger, command)
-            return
-
-        self._cooldowns[key] = now
 
         event: SongEvent | None = self.last_event[0]
 
@@ -102,6 +91,12 @@ class ChannelCommandHandler:
             await self.irc.send(network_name, channel, "No song information available yet.")
             return
 
+        key = (network_name, channel, "np")
+        if self._last_replied.get(key) == event.song_id:
+            log.debug("Suppressing !np in %s/%s — same song_id %s", network_name, channel, event.song_id)
+            return
+        self._last_replied[key] = event.song_id
+
         # Use np_format if set, otherwise fall back to the announce format
         fmt = self.cmd_cfg.np_format or self.ann_cfg.format
         from config import AnnounceConfig
@@ -115,6 +110,12 @@ class ChannelCommandHandler:
         if event is None or event.playing_next is None:
             await self.irc.send(network_name, channel, "No upcoming song information available.")
             return
+
+        key = (network_name, channel, "next")
+        if self._last_replied.get(key) == event.playing_next.song_id:
+            log.debug("Suppressing !next in %s/%s — same song_id %s", network_name, channel, event.playing_next.song_id)
+            return
+        self._last_replied[key] = event.playing_next.song_id
 
         nxt = event.playing_next
         fb = self.ann_cfg.fallbacks

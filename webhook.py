@@ -17,6 +17,7 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class NextSong:
+    song_id: str
     artist: str
     title: str
     text: str
@@ -142,6 +143,7 @@ def _parse(payload: list | dict) -> SongEvent | None:
         if next_raw and "song" in next_raw:
             ns = next_raw["song"]
             playing_next = NextSong(
+                song_id=ns.get("id", ""),
                 artist=ns.get("artist", ""),
                 title=ns.get("title", ""),
                 text=ns.get("text", ""),

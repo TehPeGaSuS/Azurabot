@@ -56,7 +56,6 @@ class AzuracastConfig:
 @dataclass
 class CommandsConfig:
     trigger: str = "!"
-    cooldown_sec: int = 60
     np_format: str = ""   # defaults to announce format if empty
     next_format: str = "Next up: \x02{artist} - {title}\x02"
 

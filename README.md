@@ -84,7 +84,6 @@ title   = "Unknown Title"
 
 [commands]
 trigger      = "!"
-cooldown_sec = 60   # Per-command cooldown per channel (seconds)
 # np_format defaults to the announce format above if not set
 # next_format supports: {artist}, {title}, {text}, {radio_name}
 next_format = 'Next up: \x02{artist} - {title}\x02'
@@ -273,7 +272,7 @@ remove #radio DALnet
 
 ## Channel commands
 
-The following commands can be used by anyone in a registered channel. Each command has its own independent cooldown (configurable via `cooldown_sec`). The bot only responds in channels that have been registered with `add`.
+The following commands can be used by anyone in a registered channel. Each command is suppressed per channel if the song hasn't changed since the last reply — the current song acts as the natural cooldown. The bot only responds in channels that have been registered with `add`.
 
 | Command | Description |
 |---|---|
