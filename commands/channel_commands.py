@@ -25,14 +25,16 @@ class ChannelCommandHandler:
         announce_cfg: AnnounceConfig,
         irc_manager,       # irc.manager.IRCManager
         last_event: list,  # [SongEvent | None]
+        db,                # db.Database
     ) -> None:
         self.cmd_cfg = commands_cfg
         self.ann_cfg = announce_cfg
         self.irc = irc_manager
         self.last_event = last_event
+        self.db = db
 
-        # (network_name, channel) -> last trigger timestamp
-        self._cooldowns: dict[tuple[str, str], float] = {}
+        # (network_name, channel, command) -> last trigger timestamp
+        self._cooldowns: dict[tuple[str, str, str], float] = {}
 
     async def handle(self, network_name: str, channel: str, mask: str, message: str) -> None:
         """Called for every PRIVMSG in a channel. Checks for trigger prefix."""
@@ -46,8 +48,14 @@ class ChannelCommandHandler:
         if command not in ("np", "nowplaying", "next"):
             return
 
+        # Only respond in channels that are registered in the DB
+        row = await self.db.get_channel(network_name, channel)
+        if row is None:
+            log.debug("Ignoring %s%s in unregistered channel %s/%s", trigger, command, network_name, channel)
+            return
+
         # Rate limit check
-        key = (network_name, channel)
+        key = (network_name, channel, command)
         now = time.monotonic()
         last = self._cooldowns.get(key, 0.0)
         if now - last < self.cmd_cfg.cooldown_sec:

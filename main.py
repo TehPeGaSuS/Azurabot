@@ -88,6 +88,7 @@ async def main() -> None:
         announce_cfg=cfg.announce,
         irc_manager=irc_manager,
         last_event=last_event,
+        db=db,
     )
 
     async def channel_handler(network_name: str, channel: str, mask: str, message: str) -> None:
