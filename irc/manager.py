@@ -15,12 +15,13 @@ log = logging.getLogger(__name__)
 
 
 class IRCManager:
-    def __init__(self, cfg: Config, pm_handler: Callable, session_clear_handler: Callable, db) -> None:
+    def __init__(self, cfg: Config, pm_handler: Callable, session_clear_handler: Callable, db, channel_handler: Callable | None = None) -> None:
         self._clients: dict[str, IRCClient] = {}
         self._tasks: dict[str, asyncio.Task] = {}
         self._cfg = cfg
         self._pm_handler = pm_handler
         self._session_clear_handler = session_clear_handler
+        self._channel_handler = channel_handler
         self._db = db
 
     async def _on_network_connected(self, network_name: str) -> None:
@@ -42,6 +43,7 @@ class IRCManager:
                 self._pm_handler,
                 self._session_clear_handler,
                 on_connected_callback=self._on_network_connected,
+                channel_handler=self._channel_handler,
             )
             self._clients[net.name] = client
             # Fire each client as a background task — start() runs the

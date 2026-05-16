@@ -330,6 +330,7 @@ class PMCommandHandler:
         event = self.last_event[0]
         if event is None:
             # Send a dummy event
+            from webhook import NextSong
             event = SongEvent(
                 song_id="test-000",
                 artist="Test Artist",
@@ -339,6 +340,7 @@ class PMCommandHandler:
                 dj_name="Test DJ",
                 radio_name="Test Radio",
                 station_url="https://example.com/public/station",
+                playing_next=NextSong(artist="Next Artist", title="Next Song", text="Next Artist - Next Song"),
                 received_at=datetime.now(timezone.utc),
             )
 

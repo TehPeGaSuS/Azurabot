@@ -32,12 +32,14 @@ class IRCClient:
         network_cfg,
         pm_handler: Callable,             # async (network_name, mask, message)
         session_clear_handler: Callable,  # async (network_name, mask)
-        on_connected_callback: Callable | None = None,  # async (network_name) — fired after 001
+        on_connected_callback: Callable | None = None,  # async (network_name)
+        channel_handler: Callable | None = None,  # async (network_name, channel, mask, message)
     ) -> None:
         self.cfg = network_cfg
         self.pm_handler = pm_handler
         self.session_clear_handler = session_clear_handler
         self.on_connected_callback = on_connected_callback
+        self.channel_handler = channel_handler
 
         self.nick = network_cfg.nick
         self._running = False
@@ -280,7 +282,11 @@ class IRCClient:
         target = params[0]
         text = " ".join(params[1:]).lstrip(":")
         if target.lower() == self.nick.lower():
+            # Private message to the bot
             await self.pm_handler(self.name, mask, text)
+        elif target.startswith(("#", "&", "+", "!")) and self.channel_handler:
+            # Channel message
+            await self.channel_handler(self.name, target, mask, text)
 
     # ------------------------------------------------------------------ #
     # Raw send

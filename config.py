@@ -49,7 +49,14 @@ class AnnounceConfig:
 
 
 @dataclass
-class NetworkConfig:
+class CommandsConfig:
+    trigger: str = "!"
+    cooldown_sec: int = 60
+    np_format: str = ""   # defaults to announce format if empty
+    next_format: str = "Next up: \x02{artist} - {title}\x02"
+
+
+
     name: str
     host: str
     port: int
@@ -78,6 +85,7 @@ class Config:
     database: DatabaseConfig
     owner: OwnerConfig
     announce: AnnounceConfig
+    commands: CommandsConfig
     networks: list[NetworkConfig]
 
     def get_network(self, name: str) -> NetworkConfig | None:
@@ -118,6 +126,13 @@ def load(path: str | Path = "config.toml") -> Config:
 
     announce = AnnounceConfig(**announce_raw, fallbacks=fallbacks)
 
+    commands_raw = raw.get("commands", {})
+    if "next_format" in commands_raw:
+        commands_raw["next_format"] = _unescape(commands_raw["next_format"])
+    if "np_format" in commands_raw:
+        commands_raw["np_format"] = _unescape(commands_raw["np_format"])
+    commands = CommandsConfig(**commands_raw)
+
     networks = []
     for n in raw.get("networks", []):
         networks.append(NetworkConfig(
@@ -146,5 +161,6 @@ def load(path: str | Path = "config.toml") -> Config:
         database=database,
         owner=owner,
         announce=announce,
+        commands=commands,
         networks=networks,
     )

@@ -16,6 +16,13 @@ log = logging.getLogger(__name__)
 
 
 @dataclass
+class NextSong:
+    artist: str
+    title: str
+    text: str
+
+
+@dataclass
 class SongEvent:
     song_id: str
     artist: str
@@ -25,6 +32,7 @@ class SongEvent:
     dj_name: str
     radio_name: str
     station_url: str
+    playing_next: NextSong | None
     received_at: datetime
 
 
@@ -111,6 +119,16 @@ def _parse(payload: list | dict) -> SongEvent | None:
         if not dj_name:
             dj_name = now_playing.get("streamer", "")
 
+        next_raw = data.get("playing_next")
+        playing_next = None
+        if next_raw and "song" in next_raw:
+            ns = next_raw["song"]
+            playing_next = NextSong(
+                artist=ns.get("artist", ""),
+                title=ns.get("title", ""),
+                text=ns.get("text", ""),
+            )
+
         return SongEvent(
             song_id=song["id"],
             artist=song.get("artist", ""),
@@ -120,6 +138,7 @@ def _parse(payload: list | dict) -> SongEvent | None:
             dj_name=dj_name,
             radio_name=data["station"]["name"],
             station_url=data["station"].get("public_player_url", ""),
+            playing_next=playing_next,
             received_at=datetime.now(timezone.utc),
         )
     except (KeyError, IndexError, TypeError) as exc:

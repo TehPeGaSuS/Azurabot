@@ -16,6 +16,7 @@ from db import Database
 from dispatcher import Dispatcher
 from irc.manager import IRCManager
 from commands.pm_commands import PMCommandHandler
+from commands.channel_commands import ChannelCommandHandler
 from webhook import WebhookServer, SongEvent
 
 logging.basicConfig(
@@ -80,6 +81,19 @@ async def main() -> None:
         event_queue=event_queue,
         last_event=last_event,
     )
+
+    # ── Channel command handler ───────────────────────────────────────────
+    channel_commands = ChannelCommandHandler(
+        commands_cfg=cfg.commands,
+        announce_cfg=cfg.announce,
+        irc_manager=irc_manager,
+        last_event=last_event,
+    )
+
+    async def channel_handler(network_name: str, channel: str, mask: str, message: str) -> None:
+        await channel_commands.handle(network_name, channel, mask, message)
+
+    irc_manager._channel_handler = channel_handler
 
     # ── Dispatcher ────────────────────────────────────────────────────────
     dispatcher = Dispatcher(
