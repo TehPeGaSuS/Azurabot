@@ -25,14 +25,23 @@ class IRCManager:
         self._db = db
 
     async def _on_network_connected(self, network_name: str) -> None:
-        """Auto-register the home channel in DB on every connect/reconnect if not already there."""
+        """Auto-register the home channel in DB on every connect/reconnect if not already there,
+        then re-join all enabled channels for this network."""
         net = self._cfg.get_network(network_name)
-        if not net or not net.home_channel:
+        if net and net.home_channel:
+            row = await self._db.get_channel(network_name, net.home_channel)
+            if row is None:
+                await self._db.add_channel(network_name, net.home_channel, announce_mode="live")
+                log.info("Auto-registered home channel %s for network %s", net.home_channel, network_name)
+
+        client = self._clients.get(network_name)
+        if not client:
             return
-        row = await self._db.get_channel(network_name, net.home_channel)
-        if row is None:
-            await self._db.add_channel(network_name, net.home_channel, announce_mode="live")
-            log.info("Auto-registered home channel %s for network %s", net.home_channel, network_name)
+        channels = await self._db.get_enabled_channels()
+        for row in channels:
+            if row["network_name"] == network_name:
+                await client.join(row["channel"])
+                log.info("Rejoined %s on %s", row["channel"], network_name)
 
     async def start(self) -> None:
         for net in self._cfg.networks:
