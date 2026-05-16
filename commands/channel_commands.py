@@ -12,8 +12,8 @@ import logging
 import time
 
 from announcer import format_message
-from config import CommandsConfig, AnnounceConfig
-from webhook import SongEvent
+from config import CommandsConfig, AnnounceConfig, AzuracastConfig
+from webhook import SongEvent, fetch_now_playing
 
 log = logging.getLogger(__name__)
 
@@ -23,12 +23,14 @@ class ChannelCommandHandler:
         self,
         commands_cfg: CommandsConfig,
         announce_cfg: AnnounceConfig,
+        azuracast_cfg: AzuracastConfig,
         irc_manager,       # irc.manager.IRCManager
         last_event: list,  # [SongEvent | None]
         db,                # db.Database
     ) -> None:
         self.cmd_cfg = commands_cfg
         self.ann_cfg = announce_cfg
+        self.az_cfg = azuracast_cfg
         self.irc = irc_manager
         self.last_event = last_event
         self.db = db
@@ -40,6 +42,7 @@ class ChannelCommandHandler:
         """Swap config in-place and prune cooldowns for removed networks."""
         self.cmd_cfg = new_cfg.commands
         self.ann_cfg = new_cfg.announce
+        self.az_cfg = new_cfg.azuracast
         if removed_networks:
             for key in list(self._cooldowns):
                 if key[0] in removed_networks:
@@ -80,7 +83,21 @@ class ChannelCommandHandler:
         elif command == "next":
             await self._cmd_next(network_name, channel, event)
 
+    async def _get_event(self) -> SongEvent | None:
+        """Return last_event if available, otherwise fall back to a live API poll."""
+        if self.last_event[0] is not None:
+            return self.last_event[0]
+        url = self.az_cfg.nowplaying_url
+        if not url:
+            return None
+        log.debug("No cached event — polling AzuraCast API")
+        event = await fetch_now_playing(url)
+        if event is not None:
+            self.last_event[0] = event
+        return event
+
     async def _cmd_np(self, network_name: str, channel: str, event: SongEvent | None) -> None:
+        event = await self._get_event()
         if event is None:
             await self.irc.send(network_name, channel, "No song information available yet.")
             return
@@ -94,6 +111,7 @@ class ChannelCommandHandler:
         await self.irc.send(network_name, channel, message)
 
     async def _cmd_next(self, network_name: str, channel: str, event: SongEvent | None) -> None:
+        event = await self._get_event()
         if event is None or event.playing_next is None:
             await self.irc.send(network_name, channel, "No upcoming song information available.")
             return

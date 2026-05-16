@@ -49,6 +49,11 @@ class AnnounceConfig:
 
 
 @dataclass
+class AzuracastConfig:
+    nowplaying_url: str = ""
+
+
+@dataclass
 class CommandsConfig:
     trigger: str = "!"
     cooldown_sec: int = 60
@@ -88,6 +93,7 @@ class Config:
     owner: OwnerConfig
     announce: AnnounceConfig
     commands: CommandsConfig
+    azuracast: AzuracastConfig
     networks: list[NetworkConfig]
 
     def get_network(self, name: str) -> NetworkConfig | None:
@@ -135,6 +141,8 @@ def load(path: str | Path = "config.toml") -> Config:
         commands_raw["np_format"] = _unescape(commands_raw["np_format"])
     commands = CommandsConfig(**commands_raw)
 
+    azuracast = AzuracastConfig(**raw.get("azuracast", {}))
+
     networks = []
     for n in raw.get("networks", []):
         networks.append(NetworkConfig(
@@ -164,5 +172,6 @@ def load(path: str | Path = "config.toml") -> Config:
         owner=owner,
         announce=announce,
         commands=commands,
+        azuracast=azuracast,
         networks=networks,
     )

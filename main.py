@@ -86,6 +86,7 @@ async def main() -> None:
     channel_commands = ChannelCommandHandler(
         commands_cfg=cfg.commands,
         announce_cfg=cfg.announce,
+        azuracast_cfg=cfg.azuracast,
         irc_manager=irc_manager,
         last_event=last_event,
         db=db,

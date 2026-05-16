@@ -88,6 +88,24 @@ class WebhookServer:
         return web.Response(status=200, text="OK")
 
 
+async def fetch_now_playing(url: str) -> "SongEvent | None":
+    """Fetch the current now-playing data directly from the AzuraCast API.
+    Used as a fallback when no webhook event has been received yet.
+    """
+    import aiohttp
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status != 200:
+                    log.warning("AzuraCast API returned HTTP %d", resp.status)
+                    return None
+                payload = await resp.json(content_type=None)
+        return _parse(payload)
+    except Exception as exc:
+        log.warning("Failed to fetch now-playing from API: %s", exc)
+        return None
+
+
 def _parse(payload: list | dict) -> SongEvent | None:
     """Parse AzuraCast now-playing payload.
 
