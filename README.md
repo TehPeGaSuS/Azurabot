@@ -128,6 +128,13 @@ on_connect_commands  = [
   "PRIVMSG NickServ@services.dal.net :IDENTIFY secret",
   "MODE mybot +x"
 ]
+# Optional: commands to run if the bot's nick is taken (433) or unavailable (437).
+# Run once per connect attempt; bot gives up until next reconnect if still unresolved.
+# If omitted, the bot falls back to appending _ to its nick.
+nick_taken_commands = [
+  "PRIVMSG NickServ :RECOVER mybot <password>",
+  "NICK mybot",
+]
 
 # No auth
 [[networks]]

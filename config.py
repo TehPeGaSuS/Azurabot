@@ -84,6 +84,9 @@ class NetworkConfig:
     # Home channel — joined automatically on every connect
     home_channel: str = ""
 
+    # Nick recovery — run when 433/437 is received (nick in use / unavailable)
+    nick_taken_commands: list[str] = field(default_factory=list)
+
 
 @dataclass
 class Config:
@@ -157,6 +160,7 @@ def load(path: str | Path = "config.toml") -> Config:
             on_connect_commands=n.get("on_connect_commands", []),
             on_connect_delay_sec=n.get("on_connect_delay_sec", 2.0),
             home_channel=n.get("home_channel", ""),
+            nick_taken_commands=n.get("nick_taken_commands", []),
         ))
 
     if not networks:

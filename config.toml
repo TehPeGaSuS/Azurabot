@@ -66,6 +66,10 @@ on_connect_commands = [
   "PRIVMSG NickServ@services.dal.net :IDENTIFY secret",
   "MODE radiobot +x"
 ]
+# nick_taken_commands = [
+#   "PRIVMSG NickServ :RECOVER radiobot <password>",
+#   "NICK radiobot",
+# ]
 
 [[networks]]
 name = "ExampleOpen"
