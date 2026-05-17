@@ -165,18 +165,19 @@ class IRCClient:
         If no PONG arrives within _PING_TIMEOUT seconds, drop the connection.
         """
         import time
-        await asyncio.sleep(_PING_INTERVAL)  # wait for registration first
+        await asyncio.sleep(_PING_INTERVAL)  # wait for registration to complete
         while True:
             token = f"azurabot{int(time.monotonic())}"
             self._pending_ping = token
             await self._raw(f"PING :{token}")
             await asyncio.sleep(_PING_TIMEOUT)
-            if self._pending_ping == token:
+            if self._pending_ping is not None:
                 # No PONG received within the timeout window
                 log.warning("[%s] PING timeout — dropping connection", self.name)
                 if self._writer:
                     self._writer.close()
                 return
+            # PONG received — wait out the rest of the interval before next ping
             await asyncio.sleep(_PING_INTERVAL - _PING_TIMEOUT)
 
     async def _read_loop(self, reader: asyncio.StreamReader) -> None:
@@ -202,8 +203,9 @@ class IRCClient:
             return
 
         if line.startswith("PONG"):
-            token = line.split(":", 1)[1] if ":" in line else ""
-            if token and self._pending_ping == token:
+            # Servers send either "PONG :token" or "PONG server :token"
+            # Just check if our pending token appears anywhere in the line
+            if self._pending_ping and self._pending_ping in line:
                 self._pending_ping = None
             return
 
