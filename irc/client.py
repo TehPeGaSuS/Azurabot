@@ -25,6 +25,7 @@ _BACKOFF_MAX = 300
 _ENCODING = "utf-8"
 _TIMEOUT = 300        # seconds — drop connection if no data received
 _PING_INTERVAL = 90   # send client PING every N seconds to keep connection alive
+_NICK_MAX_ATTEMPTS = 3  # max alternative nicks to try before reconnecting
 
 
 class IRCClient:
@@ -49,7 +50,8 @@ class IRCClient:
         self._backoff = _BACKOFF_START
         self._sasl_requested = False
         self._registered = False
-        self._nick_taken_handled = False  # only attempt recovery once per connect
+        self._nick_taken_handled = False  # only run nick_taken_commands once per connect
+        self._nick_attempt = 0            # fallback counter for OneFM_1, OneFM_2, etc
 
     @property
     def name(self) -> str:
@@ -133,6 +135,7 @@ class IRCClient:
         self._registered = False
         self._sasl_requested = False
         self._nick_taken_handled = False
+        self._nick_attempt = 0
 
         # Enable TCP keepalives so NAT/firewall middleboxes don't silently
         # drop idle connections (common with ircd-hybrid networks).
@@ -241,19 +244,24 @@ class IRCClient:
 
         elif command in ("433", "437"):
             reason = "Nick in use" if command == "433" else "Nick unavailable"
-            if self._nick_taken_handled:
-                log.warning("[%s] %s and recovery already attempted — waiting for reconnect", self.name, reason)
-                return
-            self._nick_taken_handled = True
             cmds = self.cfg.nick_taken_commands
             if cmds:
+                if self._nick_taken_handled:
+                    log.warning("[%s] %s and recovery already attempted — waiting for reconnect", self.name, reason)
+                    return
+                self._nick_taken_handled = True
                 log.warning("[%s] %s — running nick_taken_commands", self.name, reason)
                 for cmd in cmds:
                     await self._raw(cmd)
             else:
-                # Fallback: append _ to nick and try again
-                new_nick = self.cfg.nick + "_"
-                log.warning("[%s] %s, trying %s (no nick_taken_commands configured)", self.name, reason, new_nick)
+                self._nick_attempt += 1
+                if self._nick_attempt > _NICK_MAX_ATTEMPTS:
+                    log.warning("[%s] %s — exhausted nick alternatives, reconnecting", self.name, reason)
+                    if self._writer:
+                        self._writer.close()
+                    return
+                new_nick = f"{self.cfg.nick}_{self._nick_attempt}"
+                log.warning("[%s] %s, trying %s", self.name, reason, new_nick)
                 self.nick = new_nick
                 await self._raw(f"NICK {new_nick}")
 
