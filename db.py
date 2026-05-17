@@ -50,10 +50,10 @@ class Database:
         self._lock = asyncio.Lock()
 
     async def connect(self) -> None:
-        self._db = await aiosqlite.connect(self.path)
+        self._db = await aiosqlite.connect(self.path, isolation_level=None)
         self._db.row_factory = aiosqlite.Row
+        await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.executescript(SCHEMA)
-        await self._db.commit()
         log.info("Database connected: %s", self.path)
 
     async def close(self) -> None:
@@ -64,10 +64,11 @@ class Database:
     async def transaction(self) -> AsyncIterator[aiosqlite.Connection]:
         async with self._lock:
             try:
+                await self._db.execute("BEGIN")
                 yield self._db
-                await self._db.commit()
+                await self._db.execute("COMMIT")
             except Exception:
-                await self._db.rollback()
+                await self._db.execute("ROLLBACK")
                 raise
 
     # ------------------------------------------------------------------ #
