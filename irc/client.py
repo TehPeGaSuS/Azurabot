@@ -23,9 +23,7 @@ log = logging.getLogger(__name__)
 _BACKOFF_START = 10
 _BACKOFF_MAX = 300
 _ENCODING = "utf-8"
-_TIMEOUT = 300        # seconds — if no data received, assume dead connection
-_PING_INTERVAL = 90   # send a PING every N seconds
-_PING_TIMEOUT = 60    # drop connection if no PONG within N seconds of our PING
+_TIMEOUT = 300  # seconds — if no data received, assume dead connection
 
 
 class IRCClient:
@@ -50,8 +48,6 @@ class IRCClient:
         self._backoff = _BACKOFF_START
         self._sasl_requested = False
         self._registered = False
-        self._last_pong: float = 0.0
-        self._pending_ping: str | None = None  # token we sent, waiting for PONG
 
     @property
     def name(self) -> str:
@@ -137,16 +133,7 @@ class IRCClient:
         log.info("[%s] TCP connected", self.name)
 
         await self._begin_registration()
-        self._last_pong = asyncio.get_event_loop().time()
-        ping_task = asyncio.create_task(self._ping_loop())
-        try:
-            await self._read_loop(reader)
-        finally:
-            ping_task.cancel()
-            try:
-                await ping_task
-            except asyncio.CancelledError:
-                pass
+        await self._read_loop(reader)
 
     async def _begin_registration(self) -> None:
         cfg = self.cfg
@@ -159,26 +146,6 @@ class IRCClient:
     # ------------------------------------------------------------------ #
     # Read loop & line dispatch
     # ------------------------------------------------------------------ #
-
-    async def _ping_loop(self) -> None:
-        """Proactively PING the server every _PING_INTERVAL seconds.
-        If no PONG arrives within _PING_TIMEOUT seconds, drop the connection.
-        """
-        import time
-        await asyncio.sleep(_PING_INTERVAL)  # wait for registration to complete
-        while True:
-            token = f"azurabot{int(time.monotonic())}"
-            self._pending_ping = token
-            await self._raw(f"PING :{token}")
-            await asyncio.sleep(_PING_TIMEOUT)
-            if self._pending_ping is not None:
-                # No PONG received within the timeout window
-                log.warning("[%s] PING timeout — dropping connection", self.name)
-                if self._writer:
-                    self._writer.close()
-                return
-            # PONG received — wait out the rest of the interval before next ping
-            await asyncio.sleep(_PING_INTERVAL - _PING_TIMEOUT)
 
     async def _read_loop(self, reader: asyncio.StreamReader) -> None:
         while True:
@@ -198,15 +165,10 @@ class IRCClient:
         log.debug("[%s] << %s", self.name, line)
 
         if line.startswith("PING"):
-            token = line.split(":", 1)[1] if ":" in line else line.split()[1]
-            await self._raw(f"PONG :{token}")
-            return
-
-        if line.startswith("PONG"):
-            # Servers send either "PONG :token" or "PONG server :token"
-            # Just check if our pending token appears anywhere in the line
-            if self._pending_ping and self._pending_ping in line:
-                self._pending_ping = None
+            # Mirror the server's format: "PING :token" → "PONG :token"
+            # but "PING token" (ircd-hybrid style) → "PONG token" (no colon)
+            rest = line[5:]  # everything after "PING "
+            await self._raw(f"PONG {rest}")
             return
 
         parts = line.split()
