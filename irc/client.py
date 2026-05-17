@@ -130,6 +130,14 @@ class IRCClient:
         self._writer = writer
         self._registered = False
         self._sasl_requested = False
+
+        # Enable TCP keepalives so NAT/firewall middleboxes don't silently
+        # drop idle connections (common with ircd-hybrid networks).
+        sock = writer.get_extra_info("socket")
+        if sock is not None:
+            import socket as _socket
+            sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_KEEPALIVE, 1)
+
         log.info("[%s] TCP connected", self.name)
 
         await self._begin_registration()

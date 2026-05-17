@@ -127,7 +127,30 @@ class PMCommandHandler:
             self._failed.pop(key, None)
         return False
 
-    async def _cmd_identify(self, network_name: str, mask: str, args: list[str]) -> None:
+    async def _resolve_channel(
+        self, network_name: str, mask: str, channel: str, explicit_net: str | None
+    ) -> tuple[str, str] | None:
+        """
+        Resolve (net, channel) for a command, handling ambiguity.
+        - If explicit_net is given, use it directly.
+        - If the channel exists on exactly one network, use that.
+        - If it exists on multiple networks, reply asking for explicit network and return None.
+        - If it doesn't exist anywhere, reply with not-found and return None.
+        """
+        if explicit_net:
+            return (explicit_net, channel)
+        all_rows = await self.db.get_all_channels()
+        matches = [r["network_name"] for r in all_rows if r["channel"].lower() == channel.lower()]
+        if not matches:
+            await self._reply(network_name, mask, f"{channel} is not registered on any network.")
+            return None
+        if len(matches) == 1:
+            return (matches[0], channel)
+        nets = ", ".join(matches)
+        await self._reply(network_name, mask, f"{channel} exists on multiple networks ({nets}). Specify one: <command> {channel} <network>")
+        return None
+
+
         if self._is_locked(network_name, mask):
             await self._reply(network_name, mask, "Too many failed attempts. Try again later.")
             return
@@ -193,7 +216,10 @@ class PMCommandHandler:
             await self._reply(network_name, mask, "Usage: remove <#channel> [network]")
             return
         channel = args[0]
-        net = args[1] if len(args) > 1 else network_name
+        resolved = await self._resolve_channel(network_name, mask, channel, args[1] if len(args) > 1 else None)
+        if not resolved:
+            return
+        net, channel = resolved
         removed = await self.db.remove_channel(net, channel)
         if removed:
             await self.irc.part_channel(net, channel)
@@ -222,7 +248,10 @@ class PMCommandHandler:
             await self._reply(network_name, mask, "Usage: info <#channel> [network]")
             return
         channel = args[0]
-        net = args[1] if len(args) > 1 else network_name
+        resolved = await self._resolve_channel(network_name, mask, channel, args[1] if len(args) > 1 else None)
+        if not resolved:
+            return
+        net, channel = resolved
         row = await self.db.get_channel(net, channel)
         if not row:
             await self._reply(network_name, mask, f"{channel} on {net} not found.")
@@ -252,12 +281,10 @@ class PMCommandHandler:
             return
 
         sub, channel, value = args[0].lower(), args[1], args[2]
-        net = args[3] if len(args) > 3 else network_name
-
-        row = await self.db.get_channel(net, channel)
-        if not row:
-            await self._reply(network_name, mask, f"{channel} on {net} not found.")
+        resolved = await self._resolve_channel(network_name, mask, channel, args[3] if len(args) > 3 else None)
+        if not resolved:
             return
+        net, channel = resolved
 
         if sub == "delay":
             # Legacy: treat as mode Xs/Xm
@@ -303,7 +330,10 @@ class PMCommandHandler:
             await self._reply(network_name, mask, f"Usage: {word} <#channel> [network]")
             return
         channel = args[0]
-        net = args[1] if len(args) > 1 else network_name
+        resolved = await self._resolve_channel(network_name, mask, channel, args[1] if len(args) > 1 else None)
+        if not resolved:
+            return
+        net, channel = resolved
         ok = await self.db.set_channel_field(net, channel, "enabled", 1 if enabled else 0)
         word = "Enabled" if enabled else "Disabled"
         if ok:
@@ -322,8 +352,10 @@ class PMCommandHandler:
             return
 
         channel = args[0]
-        net = args[1] if len(args) > 1 else network_name
-
+        resolved = await self._resolve_channel(network_name, mask, channel, args[1] if len(args) > 1 else None)
+        if not resolved:
+            return
+        net, channel = resolved
         row = await self.db.get_channel(net, channel)
         if not row:
             await self._reply(network_name, mask, f"{channel} on {net} not found.")
@@ -331,7 +363,6 @@ class PMCommandHandler:
 
         event = self.last_event[0]
         if event is None:
-            # Send a dummy event
             from webhook import NextSong
             event = SongEvent(
                 song_id="test-000",
@@ -342,7 +373,7 @@ class PMCommandHandler:
                 dj_name="Test DJ",
                 radio_name="Test Radio",
                 station_url="https://example.com/public/station",
-                playing_next=NextSong(artist="Next Artist", title="Next Song", text="Next Artist - Next Song"),
+                playing_next=NextSong(song_id="test-001", artist="Next Artist", title="Next Song", text="Next Artist - Next Song"),
                 received_at=datetime.now(timezone.utc),
             )
 
