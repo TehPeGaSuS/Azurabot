@@ -150,7 +150,7 @@ class PMCommandHandler:
         await self._reply(network_name, mask, f"{channel} exists on multiple networks ({nets}). Specify one: <command> {channel} <network>")
         return None
 
-
+    async def _cmd_identify(self, network_name: str, mask: str, args: list[str]) -> None:
         if self._is_locked(network_name, mask):
             await self._reply(network_name, mask, "Too many failed attempts. Try again later.")
             return
