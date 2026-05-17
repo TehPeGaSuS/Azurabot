@@ -23,7 +23,8 @@ log = logging.getLogger(__name__)
 _BACKOFF_START = 10
 _BACKOFF_MAX = 300
 _ENCODING = "utf-8"
-_TIMEOUT = 300  # seconds — if no data received, assume dead connection
+_TIMEOUT = 300        # seconds — drop connection if no data received
+_PING_INTERVAL = 90   # send client PING every N seconds to keep connection alive
 
 
 class IRCClient:
@@ -141,7 +142,15 @@ class IRCClient:
         log.info("[%s] TCP connected", self.name)
 
         await self._begin_registration()
-        await self._read_loop(reader)
+        ping_task = asyncio.create_task(self._ping_loop(cfg.host), name=f"ping-{self.name}")
+        try:
+            await self._read_loop(reader)
+        finally:
+            ping_task.cancel()
+            try:
+                await ping_task
+            except asyncio.CancelledError:
+                pass
 
     async def _begin_registration(self) -> None:
         cfg = self.cfg
@@ -154,6 +163,19 @@ class IRCClient:
     # ------------------------------------------------------------------ #
     # Read loop & line dispatch
     # ------------------------------------------------------------------ #
+
+    async def _ping_loop(self, host: str) -> None:
+        """Send a PING to the server every _PING_INTERVAL seconds.
+        Keeps ircd-hybrid (and other IRCds) from timing out idle connections.
+        We don't track PONG replies — the read loop's _TIMEOUT handles dead connections.
+        """
+        await asyncio.sleep(_PING_INTERVAL)
+        while True:
+            try:
+                await self._raw(f"PING :{host}")
+            except Exception:
+                return
+            await asyncio.sleep(_PING_INTERVAL)
 
     async def _read_loop(self, reader: asyncio.StreamReader) -> None:
         while True:
